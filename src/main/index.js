@@ -1,62 +1,78 @@
-'use strict'
+const { app } = require('electron');
+const path = require('path');
+const process = require('process');
 
-import { app, BrowserWindow } from 'electron'
-import * as path from 'path'
-import { format as formatUrl } from 'url'
+const filePath = '../child.js';
+const fullPath = path.resolve(__dirname, filePath);
 
-const isDevelopment = process.env.NODE_ENV !== 'production'
+function createProcessFork() {
+  const cp = require('child_process');
+  try {
 
-// global reference to mainWindow (necessary to prevent window from being garbage collected)
-let mainWindow
+    const child = cp.fork(fullPath, [], { silent: true });
 
-function createMainWindow() {
-  const window = new BrowserWindow({webPreferences: {nodeIntegration: true}})
+    child.stdout.on('data', (data) => {
+      log(2, 'Fork', data.toString());
+    });
 
-  if (isDevelopment) {
-    window.webContents.openDevTools()
+    child.stderr.on('data', (data) => {
+      log(3, 'Fork', data.toString());
+    });
   }
-
-  if (isDevelopment) {
-    window.loadURL(`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}`)
+  catch (error) {
+    log(4, 'Fork', error.message);
   }
-  else {
-    window.loadURL(formatUrl({
-      pathname: path.join(__dirname, 'index.html'),
-      protocol: 'file',
-      slashes: true
-    }))
-  }
-
-  window.on('closed', () => {
-    mainWindow = null
-  })
-
-  window.webContents.on('devtools-opened', () => {
-    window.focus()
-    setImmediate(() => {
-      window.focus()
-    })
-  })
-
-  return window
 }
 
-// quit application when all windows are closed
-app.on('window-all-closed', () => {
-  // on macOS it is common for applications to stay open until the user explicitly quits
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+function createProcessExecFile() {
+  try {
+    const child = require('child_process').execFile('node', [fullPath], {}, (error, stdout, stderr) => {
+      if (error) {
+        log(1, 'ExecFile', error.message);
+      }
 
-app.on('activate', () => {
-  // on macOS it is common to re-create a window even after all windows have been closed
-  if (mainWindow === null) {
-    mainWindow = createMainWindow()
-  }
-})
+      // log(2, 'ExecFile', stdout);
+      // log(3, 'ExecFile', stderr);
+    });
 
-// create main BrowserWindow when electron is ready
+    child.stdout.on('data', (data) => {
+      log(2, 'ExecFile', data);
+    });
+
+    child.stderr.on('data', (data) => {
+      log(3, 'ExecFile', data);
+    });
+  }
+  catch (error) {
+    log(4, 'ExecFile', error.message);
+  }
+}
+
+function log(type, sourceMethod, logMessage) {
+  let source = 'Unknown';
+  if (type == 1) {
+    source = 'Error';
+  } else if (type == 2) {
+    source = 'Stdout';
+  } else if (type == 3) {
+    source = 'Stderr';
+  } else if (type == 4) {
+    source = 'Main Process';
+  }
+
+  const message = `${sourceMethod} - ${source}: ${logMessage}`;
+
+  console.log(message);
+}
+
 app.on('ready', () => {
-  mainWindow = createMainWindow()
-})
+  console.log('Electron Version: ' + process.versions.electron)
+  console.log('App Version: ' + app.getVersion())
+  console.log('process.execPath: ' + process.execPath);
+  console.log();
+
+  createProcessFork({ name: "Fork" });
+  createProcessExecFile({ name: "ExecFile" })
+});
+
+

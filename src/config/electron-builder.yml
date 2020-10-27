@@ -1,0 +1,7 @@
+appId: electron-child-process
+productName: electron-child-process
+asar: true
+artifactName: ${productName}.${os}.${arch}.${version}.${ext}
+extraResources: 
+  - from: src/child.js 
+    to: child.js
